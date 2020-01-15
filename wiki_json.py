@@ -44,17 +44,17 @@ wiki_movies_director_df = pd.DataFrame(wiki_movies)
 len(wiki_movies_director_df.columns.tolist())
 # %%
 # test data 
-wiki_movies_raw_df.loc[wiki_movies_raw_df['Arabic'].notnull()]
-wiki_movies_raw_df['year'].dtypes
-wiki_movies_raw_df['Arabic'].value_counts()
+#wiki_movies_raw_df.loc[wiki_movies_raw_df['Arabic'].notnull()]
+#wiki_movies_raw_df['year'].dtypes
+#wiki_movies_raw_df['Arabic'].value_counts()
 # %%
 # find alternate title columns
 wiki_column_lst = wiki_movies_director_df.columns.tolist()
 sorted(wiki_column_lst)
 # %%
 # test of detemining alternative title column
-wiki_foreign_movies = [movie for movie in wiki_movies_raw if 'Literally' in movie]
-wiki_foreign_movies[:1]
+# wiki_foreign_movies = [movie for movie in wiki_movies_raw if 'Literally' in movie]
+# wiki_foreign_movies[:1]
  # %%
  # ----------TRANSFORM PART 1:  CLEAN COLUMNS in python form------------
  # create alt_title cleaning FUNCTION and a inner fuction of merging specific columns
@@ -124,5 +124,17 @@ print(len(wiki_movies_df))
 wiki_movies_df.drop_duplicates(subset='imdb_id', inplace=True)
 print(len(wiki_movies_df))
 wiki_movies_df.head()
+
+# %%
+ # ----------TRANSFORM PART 3:  CLEAN mostly null COLUMNS in DF form BY using list comprehension ------------
+# check every column's null count
+# remove columns which have over 90% null rows
+
+wiki_columns_to_keep = [column for column in wiki_movies_df.columns if wiki_movies_df[column].isnull().sum() < len(wiki_movies_df) * 0.9]
+# alter DF on selected columns 
+wiki_movies_df = wiki_movies_df[wiki_columns_to_keep]
+wiki_movies_df
+# -----191 columns reduced to 21 columns and 7033 rows now
+# %%
 
 # %%
