@@ -26,10 +26,9 @@ kaggle_metadata_df.tail()
 # %%
 # -----------TRANSFORM process-------------------------
 # wiki source tranform into DataFrame to inspect
-wiki_movies_df = pd.DataFrame(wiki_movies_raw)
-wiki_movies_df.head()
-wiki_movies_df.columns.tolist()
-#wiki_movies_df.index
+wiki_movies_raw_df = pd.DataFrame(wiki_movies_raw)
+wiki_movies_raw_df.head()
+wiki_movies_raw_df.columns.tolist()
 
 # %%
 # filter wiki datasets by only contains director and Imdb information
@@ -45,9 +44,9 @@ wiki_movies_director_df = pd.DataFrame(wiki_movies)
 len(wiki_movies_director_df.columns.tolist())
 # %%
 # test data 
-wiki_movies_df.loc[wiki_movies_df['Arabic'].notnull()]
-wiki_movies_df['year'].dtypes
-wiki_movies_df['Arabic'].value_counts()
+wiki_movies_raw_df.loc[wiki_movies_raw_df['Arabic'].notnull()]
+wiki_movies_raw_df['year'].dtypes
+wiki_movies_raw_df['Arabic'].value_counts()
 # %%
 # find alternate title columns
 wiki_column_lst = wiki_movies_director_df.columns.tolist()
@@ -57,6 +56,7 @@ sorted(wiki_column_lst)
 wiki_foreign_movies = [movie for movie in wiki_movies_raw if 'Literally' in movie]
 wiki_foreign_movies[:1]
  # %%
+ # ----------TRANSFORM PART 1:  CLEAN COLUMNS in python form------------
  # create alt_title cleaning FUNCTION and a inner fuction of merging specific columns
 def clean_movie(movie):
     # Step 1: Make an empty dict to hold all of the alternative titles.
@@ -78,9 +78,10 @@ def clean_movie(movie):
     # Step 3: After looping through every key, add the alternative titles dict to the movie object.
     if len(alt_titles_dict) > 0:  # make sure it's valid, then add back to movie, like DF adding column method
         movie['alt_titles'] = alt_titles_dict
-# inner function(call it ONLY in the outer FUNCTION)
+# inner function for merging column names
     def change_column_name(old_name, new_name):
-        movie[new_name] = movie.pop(old_name)
+        if old_name in movie:
+            movie[new_name] = movie.pop(old_name)
         # no return needed
 # call inner function on every instance in outer function's scope
     change_column_name('Adaptation by', 'Writer(s)')
@@ -104,7 +105,24 @@ def clean_movie(movie):
     change_column_name('Written by', 'Writer(s)')
 # return of outer function
     return movie
-    
+
+# %%
+# CALL clean function in list comprehension
+clean_movies_ListofDict = [clean_movie(movie) for movie in wiki_movies]
+# transfter into DataFrame
+wiki_movies_df = pd.DataFrame(clean_movies_ListofDict)
+sorted(wiki_movies_df.columns.tolist())
 
 
-    
+# %%
+ # ----------TRANSFORM PART 2:  CLEAN ROWS in DF form------------
+# use Regex to EXTRACT imdb_ID
+# import re is not nessesary because Series.str.extract() asking for regex in parenthesis
+wiki_movies_df['imdb_id'] = wiki_movies_df['imdb_link'].str.extract(r'(tt\d{7})')
+print(len(wiki_movies_df))
+# use imdb_id as identifier to drop duplicates rows
+wiki_movies_df.drop_duplicates(subset='imdb_id', inplace=True)
+print(len(wiki_movies_df))
+wiki_movies_df.head()
+
+# %%
