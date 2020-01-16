@@ -2,7 +2,7 @@
 import json
 import pandas as pd 
 import numpy as np 
-
+import re
 # %%
 # ----------EXTRACT process-------------------------
 # load Wiki source (json file) into python, use f_string
@@ -56,7 +56,7 @@ sorted(wiki_column_lst)
 # wiki_foreign_movies = [movie for movie in wiki_movies_raw if 'Literally' in movie]
 # wiki_foreign_movies[:1]
  # %%
- # ----------TRANSFORM PART 1:  CLEAN COLUMNS in python form------------
+ # ----------TRANSFORM PART 1-1:  CLEAN COLUMNS in python form------------
  # create alt_title cleaning FUNCTION and a inner fuction of merging specific columns
 def clean_movie(movie):
     # Step 1: Make an empty dict to hold all of the alternative titles.
@@ -115,7 +115,7 @@ sorted(wiki_movies_df.columns.tolist())
 
 
 # %%
- # ----------TRANSFORM PART 2:  CLEAN ROWS in DF form------------
+ # ----------TRANSFORM PART 1-2:  CLEAN ROWS in DF form------------
 # use Regex to EXTRACT imdb_ID
 # import re is not nessesary because Series.str.extract() asking for regex in parenthesis
 wiki_movies_df['imdb_id'] = wiki_movies_df['imdb_link'].str.extract(r'(tt\d{7})')
@@ -126,15 +126,33 @@ print(len(wiki_movies_df))
 wiki_movies_df.head()
 
 # %%
- # ----------TRANSFORM PART 3:  CLEAN mostly null COLUMNS in DF form BY using list comprehension ------------
+ # ----------TRANSFORM PART 1-3:  CLEAN mostly null COLUMNS in DF form BY using list comprehension ------------
 # check every column's null count
 # remove columns which have over 90% null rows
 
-wiki_columns_to_keep = [column for column in wiki_movies_df.columns if wiki_movies_df[column].isnull().sum() < len(wiki_movies_df) * 0.9]
+wiki_columns_to_keep = [column for column in wiki_movies_df.columns.tolist() if wiki_movies_df[column].isnull().sum() < len(wiki_movies_df) * 0.9]
 # alter DF on selected columns 
 wiki_movies_df = wiki_movies_df[wiki_columns_to_keep]
-wiki_movies_df
+wiki_movies_df.dtypes
 # -----191 columns reduced to 21 columns and 7033 rows now
 # %%
+#  # ----------TRANSFORM PART 2-1:  Parse data to set data types ------------
+# drop null rows of box office (1548 null rows)
+box_office_Series = wiki_movies_df['Box office'].dropna()
+len(box_office_Series)
+
+# lambda + map() to pick up 135 not_a_string rows in box_office Series
+wrong_type_bo = box_office_Series[box_office_Series.map(lambda x: type(x) != str)]
+
+# transform list type into string by ''.join(), apply() and lambda function 
+box_office_Series.apply(lambda x: ''.join(x) if type(x) == list else x)
+#box_office_Series[7048]
+
+# %%
+# ----------TRANSFORM PART 2-2:  Parse box_office data by Regex ------------
+# box_office form-1 : like $123.4 million” (or billion)
+form_one = r'\$\d+\.?\d*\s*[mb]illion'
+# use pd.Series.str.contains(re) to determine whether contains form_one and sum() 
+box_office_Series.str.contains(form_one, flags = re.IGNORECASE).sum()
 
 # %%
