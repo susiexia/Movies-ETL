@@ -3,6 +3,9 @@ import json
 import pandas as pd 
 import numpy as np 
 import re
+# pd.to_sql() need connection
+from sqlalchemy import create_engine
+import psycopg2 # postgres adaptor 
 # %%
 # ----------EXTRACT process-------------------------
 # load Wiki source (json file) into python, use f_string
@@ -138,32 +141,76 @@ wiki_movies_df.head()
 # -----191 columns reduced to 21 columns and 7033 rows now
 # %%
 
-
-#  # ----------TRANSFORM PART 2-1:  Parse data to set data types ------------
+#  # ----------TRANSFORM PART 2:  BOX_OFFICE CLEAN ------------
 # drop null rows of box office (1548 null rows)(contains 5485 valid rows)
 box_office_Series = wiki_movies_df['Box office'].dropna()
 len(box_office_Series)
 # %%
+#  # ----------TRANSFORM PART 2(prework): ----convert list to string--------BOX_OFFICE CLEAN ------------
 # lambda + map() to pick up 135 not_a_string rows in box_office Series
-box_office_Series[box_office_Series.map(lambda x: type(x) != str)]
+# check the amount
+
+#box_office_Series[box_office_Series.map(lambda x: type(x) != str)]
 
 # transform list type into string by 'a space'.join(), apply() and lambda function 
 box_office_Series = box_office_Series.apply(lambda x: ' '.join(x) if type(x) == list else x)
 
+# box_office replace dash in the range type instance then use Series.tri.replace(regex style)
+box_office_Series.str.replace(r'\$.*[-—–](?![a-z])', '$', regex = True)
 
 # %%
-# ----------TRANSFORM PART 2-2:  Parse box_office data by Regex ------------
-# box_office form-1 : like $123.4 million” (or billion)
-form_one = r'\$\d+\.?\d*\s*[mb]illion'
+#  # ----------TRANSFORM PART 2(prework): ----REGEX TEST--------BOX_OFFICE CLEAN ------------
+                         
+# box_office form-1 : like $ 123.4 million” (or billion)
+form_one = r'\$\s*\d+\.?\d*\s*[mb]illi?on'
 # use pd.Series.str.contains(re) to determine whether contains form_one and sum() 
 matches_form_one_bool = box_office_Series.str.contains(form_one, flags = re.IGNORECASE)
 
-# box_office form-1 : like $123,456,789
-form_two = r'\$\d{1,3}(?:,\d{1,3})+'
+# box_office form-1 : like $123,456,789 or $ 1.234
+form_two = r'\$\s*\d{1,3}(?:[,\.]\d{3})+(?!\s[mb]illi?on)'
 matches_form_two_bool = box_office_Series.str.contains(form_two, flags = re.IGNORECASE)
 
-# element-wise logical operators (&, ~, |)
-box_office_Series[~matches_form_one_bool & ~matches_form_two_bool]
+# element-wise logical operators (&, ~, |) to check remaining wrong format
+remaining_not_clean = box_office_Series[~matches_form_one_bool & ~matches_form_two_bool]
 
 # %%
-# ----------TRANSFORM PART 2-3:  Parse box_office to fix Regex Pattern Match ------------
+#  # ----------TRANSFORM PART 2:  BOX_OFFICE CLEAN  build a funtion based on prework------------
+def parse_dollars(s):
+    # step 1: check if str type
+    if type(s) != str:
+        return np.nan
+    # step 2: check if match search pattern and return it (use raw string)
+    # if input is of the form $###.# million
+    if re.match(r'\$\s*\d+\.?\d*\s*milli?on', s, flags=re.IGNORECASE):
+        # remove and replace $ and space and 'million' word
+        s = re.sub('\$|\s|[a-zA-Z]', '', s)
+        # float it and return 
+        value = float(s)*10**6
+        return value
+    # if input is of the form $###.# billion
+    elif re.match(r'\$\s*\d+\.?\d*\s*billi?on', s, flags=re.IGNORECASE):
+        s = re.sub('\$|\s|[a-zA-Z]','',s)
+        value = float(s)*10**9
+        return value
+    # if input is of the form $###,###,###
+    elif re.match(r'\$\s*\d{1,3}(?:[,\.]\d{3})+(?!\s[mb]illion)', s, flags=re.IGNORECASE):
+        # remove dollar sign and commas
+        s = re.sub('\$|,', '', s)
+        value = float(s)
+        return value
+    else:
+        return np.nan
+
+# %%
+#  # ----------TRANSFORM PART 2:  call function----BOX_OFFICE CLEAN ------------
+# use str.extract() funtion to add a new column on DF, and apply function
+wiki_movies_df['box_office'] = box_office_Series.str.extract(f'({form_one}|{form_two})', \
+    flags=re.IGNORECASE)[0].apply(parse_dollars)
+
+# drop previouse column: box office
+wiki_movies_df.drop('Box office', axis=1, inplace=True)
+
+wiki_movies_df.head()
+                            
+
+# %%
