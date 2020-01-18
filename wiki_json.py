@@ -283,4 +283,18 @@ wiki_movies_df.drop('Running time', axis = 1, inplace = True)
 
 wiki_movies_df.head()
 # %%
+# --------KAGGLE ---TRANSFORM 1 (preprocess) ------------------
+kaggle_metadata_df.dtypes
 
+# check if 'adult' and 'video' are ready to convert to boolean
+kaggle_metadata_df['adult'].value_counts()  # several bad data in 'adult'
+# check where is the bad data other than True or False
+corrupt_adult = kaggle_metadata_df['adult'].isin(['True', 'False'])
+kaggle_metadata_df.loc[~corrupt_adult] 
+
+# only keep rows where adult is False,(filter the whole df) and then drop the “adult” column.
+# reduced kaggle_metadata DF by 12 rows and 1 columns
+kaggle_metadata = kaggle_metadata_df[kaggle_metadata_df['adult']== 'False'].drop('adult', axis = 'columns')
+
+kaggle_metadata.head()
+# %%
