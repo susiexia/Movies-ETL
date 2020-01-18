@@ -146,7 +146,7 @@ wiki_movies_df.head()
 box_office_Series = wiki_movies_df['Box office'].dropna()
 len(box_office_Series)
 # %%
-#  # ----------TRANSFORM PART 2(prework): ----convert list to string--------BOX_OFFICE CLEAN ------------
+#  # ----------TRANSFORM PART 2(preprocess): ----convert list to string--------BOX_OFFICE CLEAN ------------
 # lambda + map() to pick up 135 not_a_string rows in box_office Series
 # check the amount
 
@@ -159,7 +159,7 @@ box_office_Series = box_office_Series.apply(lambda x: ' '.join(x) if type(x) == 
 box_office_Series.str.replace(r'\$.*[-—–](?![a-z])', '$', regex = True)
 
 # %%
-#  # ----------TRANSFORM PART 2(prework): ----REGEX TEST--------BOX_OFFICE CLEAN ------------
+#  # ----------TRANSFORM PART 2(preprocess): ----REGEX TEST--------BOX_OFFICE CLEAN ------------
                          
 # box_office form-1 : like $ 123.4 million” (or billion)
 form_one = r'\$\s*\d+\.?\d*\s*[mb]illi?on'
@@ -183,19 +183,19 @@ def parse_dollars(s):
     # if input is of the form $###.# million
     if re.match(r'\$\s*\d+\.?\d*\s*milli?on', s, flags=re.IGNORECASE):
         # remove and replace $ and space and 'million' word
-        s = re.sub('\$|\s|[a-zA-Z]', '', s)
+        s = re.sub(r'\$|\s|[a-zA-Z]', '', s)
         # float it and return 
-        value = float(s)*10**6
+        value = float(s)*10**6   # will be a float point number
         return value
     # if input is of the form $###.# billion
     elif re.match(r'\$\s*\d+\.?\d*\s*billi?on', s, flags=re.IGNORECASE):
-        s = re.sub('\$|\s|[a-zA-Z]','',s)
+        s = re.sub(r'\$|\s|[a-zA-Z]','',s)
         value = float(s)*10**9
         return value
     # if input is of the form $###,###,###
     elif re.match(r'\$\s*\d{1,3}(?:[,\.]\d{3})+(?!\s[mb]illion)', s, flags=re.IGNORECASE):
         # remove dollar sign and commas
-        s = re.sub('\$|,', '', s)
+        s = re.sub(r'\$|,', '', s)
         value = float(s)
         return value
     else:
@@ -204,8 +204,9 @@ def parse_dollars(s):
 # %%
 #  # ----------TRANSFORM PART 2:  call function----BOX_OFFICE CLEAN ------------
 # use str.extract() funtion to add a new column on DF, and apply function
+# use [0] to extract the first column of  box_office_Series(it's a DF due to extract funtion)
 wiki_movies_df['box_office'] = box_office_Series.str.extract(f'({form_one}|{form_two})', \
-    flags=re.IGNORECASE)[0].apply(parse_dollars)
+                                flags=re.IGNORECASE)[0].apply(parse_dollars)
 
 # drop previouse column: box office
 wiki_movies_df.drop('Box office', axis=1, inplace=True)
@@ -214,3 +215,72 @@ wiki_movies_df.head()
                             
 
 # %%
+#  # ----------TRANSFORM PART 3: (preprocess) BUDGET CLEAN ------------
+# preprocess 1: drop nan rows
+budget_Series = wiki_movies_df['Budget'].dropna()
+# preprocess 2: convert list to str
+budget_Series = budget_Series.map(lambda x: ' '.join(x) if type(x) == list else x)
+
+# preprocess 3: convert range numbers
+budget_Series = budget_Series.str.replace(r'\$.*[-—–](?![a-z])', '$', regex=True)
+
+# check improper form
+
+matches_form_one_bool = budget_Series.str.contains(form_one, flags = re.IGNORECASE)
+matches_form_one_bool = budget_Series.str.contains(form_one, flags = re.IGNORECASE)
+
+budget_Series[~matches_form_one_bool & ~matches_form_two_bool]
+# %%
+#  # ----------TRANSFORM PART 3: call function BUDGET CLEAN ------------
+
+wiki_movies_df['budget'] = budget_Series.str.extract(f'({form_one}|{form_two})', flags=re.IGNORECASE)[0].apply(parse_dollars)
+
+wiki_movies_df.drop('Budget', axis = 1, inplace = True)
+
+# %%
+#  # ----------TRANSFORM PART 4: (preprocess) RELEASE DATE CLEAN ------------
+# preprocess : drop nan rows and convert list to str
+release_date_Series = wiki_movies_df['Release date'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
+
+# preprocess 3: convert range numbers
+# release_date_Series.str.replace(r'\$.*[-—–](?![a-z])', '$', regex=True)
+
+# check improper form
+date_form_one = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s[123]\d,\s\d{4}'
+date_form_two = r'\d{4}.[01]\d.[123]\d'
+date_form_three = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}'
+date_form_four = r'\d{4}'
+#  # ----------TRANSFORM PART 4: RELEASE DATE CLEAN ------------
+# extract date as a column and use pandas build-in function to convert datetime format
+try: 
+    wiki_movies_df['release_date'] = pd.to_datetime(release_date_Series.str.extract(f'({date_form_one}|{date_form_two}|{date_form_three}|{date_form_four})')[0], infer_datetime_format=True)
+except:
+    wiki_movies_df['release_date'] = np.nan
+    print('Wrong date format')
+wiki_movies_df.drop('Release date', axis = 1, inplace = True)
+
+# %%
+#  # ----------TRANSFORM PART 5: (preprocess) Running Time CLEAN ------------
+
+running_time_Series = wiki_movies_df['Running time'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
+len(running_time_Series)
+# regular pattern (applied caputure group)
+running_form_regular =r'(\d+)\s*m'
+# hour + minute patterns (applied caputure group)
+running_form_two = r'(\d+)\s*ho?u?r?s?\s*(\d*)'
+
+# extract running time and use pd built_in funtion to_numeric convert str to number
+
+running_time_extract_df = running_time_Series.str.extract(r'(\d+)\s*ho?u?r?s?\s*(\d*)|(\d+)\s*m')
+
+# apply to_numeric and fillna() 
+running_time_extract = running_time_extract_df.apply(lambda col: pd.to_numeric(col, errors= 'coerce')).fillna(0)
+
+# convert hour to minute and make a Series then put it back into DF
+wiki_movies_df['running_time'] = running_time_extract.apply(lambda row: row[0]*60 +row[1] if row[2] == 0 else row[2], axis =1)
+# drop origin one
+wiki_movies_df.drop('Running time', axis = 1, inplace = True)
+
+wiki_movies_df.head()
+# %%
+
