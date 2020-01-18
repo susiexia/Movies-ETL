@@ -283,7 +283,7 @@ wiki_movies_df.drop('Running time', axis = 1, inplace = True)
 
 wiki_movies_df.head()
 # %%
-# --------KAGGLE ---TRANSFORM 1 (preprocess) ------------------
+# --------KAGGLE ---TRANSFORM 1 ---adult column  ------------------
 kaggle_metadata_df.dtypes
 
 # check if 'adult' and 'video' are ready to convert to boolean
@@ -298,3 +298,25 @@ kaggle_metadata = kaggle_metadata_df[kaggle_metadata_df['adult']== 'False'].drop
 
 kaggle_metadata.head()
 # %%
+# --------KAGGLE ---TRANSFORM 2 video column------------------
+# convert data type from str to boolean
+
+# create boolean column
+# kaggle_metadata['video'] == 'True'
+# assign back to DF
+kaggle_metadata['video'] = kaggle_metadata['video'] == 'True'
+kaggle_metadata.video.dtypes
+# %%
+# --------KAGGLE ---TRANSFORM 3 budget, id, popularity and release_date column------------------
+# convert those 3 columns from str type to numeric
+# use astype for 'budget' column
+kaggle_metadata['budget'] = kaggle_metadata['budget'].astype(int)
+# use pd.to_numeric for 'id' and 'popularity' columns
+kaggle_metadata['id'] = pd.to_numeric(kaggle_metadata['id'])
+kaggle_metadata['popularity'] = pd.to_numeric(kaggle_metadata['popularity'], errors= 'raise')
+# use to_datetime for 'release_date' column
+kaggle_metadata['release_date'] = pd.to_datetime(kaggle_metadata['release_date'],errors='raise')
+
+# %%
+# --------Ratings csv ---TRANSFORM ------------------
+# check a summary description
