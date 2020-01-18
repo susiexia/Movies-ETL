@@ -277,6 +277,7 @@ running_time_extract_df = running_time_Series.str.extract(r'(\d+)\s*ho?u?r?s?\s*
 running_time_extract = running_time_extract_df.apply(lambda col: pd.to_numeric(col, errors= 'coerce')).fillna(0)
 
 # convert hour to minute and make a Series then put it back into DF
+# access each row by 'lambda row' function
 wiki_movies_df['running_time'] = running_time_extract.apply(lambda row: row[0]*60 +row[1] if row[2] == 0 else row[2], axis =1)
 # drop origin one
 wiki_movies_df.drop('Running time', axis = 1, inplace = True)
@@ -318,5 +319,149 @@ kaggle_metadata['popularity'] = pd.to_numeric(kaggle_metadata['popularity'], err
 kaggle_metadata['release_date'] = pd.to_datetime(kaggle_metadata['release_date'],errors='raise')
 
 # %%
-# --------Ratings csv ---TRANSFORM ------------------
+# --------Ratings csv ---TRANSFORM ---------------------------
 # check a summary description
+ratings_df.info(null_counts= True)
+
+# convert timstamp to pd.datetime data type, unit is second
+ratings_df['timestamp'] = pd.to_datetime(ratings_df['timestamp'], unit='s')
+ratings_df.info()
+
+# %%
+# --------Ratings csv ---TRANSFORM --stats info ---------------------------
+
+# check data distribution by histogram 
+ratings_df['rating'].plot(kind = 'hist')
+# check data statistical information
+ratings_df['rating'].describe()   #The median score is 3.5, the mean is 3.53
+
+# %%
+# ---------------TRANSFORM: MERGE DF (inner join)-------------------------------
+movies_df = pd.merge(wiki_movies_df, kaggle_metadata, on ='imdb_id', suffixes=('_wiki','_kaggle'))
+movies_df.head()
+# %% [markdown]
+# Competing data:
+# Wiki                     Movielens                Resolution
+#--------------------------------------------------------------------------
+# title_wiki               title_kaggle            Drop Wikipedia
+# running_time             runtime                 Keep Kaggle; and fill in zeros with Wikipedia data
+# budget_wiki              budget_kaggle           Keep Kaggle; and fill in zeros with Wikipedia data
+# box_office               revenue                 Keep Kaggle; and fill in zeros with Wikipedia data
+# release_date_wiki        release_date_kaggle     Drop Wikipedia
+# Language                 original_language       Drop Wikipedia
+# Production company(s)    production_companies    Drop Wikipedia
+
+# %%
+# ---------------------DECISION-----title column-----------------
+# compare two title columns
+movies_df[['title_wiki','title_kaggle']]
+# confirm there is no any missing data or empty in kaggle title column
+movies_df[(movies_df['title_kaggle'] == '')|(movies_df['title_kaggle'].isnull())]
+
+# %%
+# ---------------------DECISION-----runtime column-----------------
+# draw a scatter plot to reveal any outlier and missing data
+movies_df.fillna(0).plot(x='running_time', y='runtime', kind = 'scatter')
+# %%
+# ---------------------DECISION-----Budget column-----------------
+# draw a scatter plot to reveal any outlier and missing data
+movies_df.fillna(0).plot(x='budget_wiki', y='budget_kaggle', kind = 'scatter')
+
+
+# %%
+# ---------------------DECISION-----BOX OFFICE & Revenue column-----------------
+# draw a scatter plot to reveal any outlier and missing data
+movies_df.fillna(0).plot(x='box_office', y='revenue', kind = 'scatter')
+
+# ---------------------DECISION----- narrow down scale BOX OFFICE & Revenue column-----------------
+#  scatter plot for everything less than $1 billion in box_office(x axies)
+narrow_down_box_movies_df = movies_df[movies_df['box_office']<10**9].fillna(0)
+narrow_down_box_movies_df.plot(x='box_office', y='revenue', kind = 'scatter')
+
+# %%
+# ---------------------DECISION---- release date (datetime)column-----------------
+movies_df[['release_date_wiki','release_date_kaggle']].plot(x= 'release_date_wiki',y='release_date_kaggle', style='.')
+
+# %%
+# investigate the outlier around 2006 (wiki)
+# and decide to drop this invalid row
+bad_data_index = movies_df[(movies_df['release_date_wiki'] > '1996-01-01') & (movies_df['release_date_kaggle'] < '1965-01-01')].index
+
+movies_df.drop(bad_data_index)
+# check missing data point in wiki (11 rows)
+movies_df[movies_df['release_date_wiki'].isnull()]
+# check missing data point in kaggle ( no missing data )
+movies_df[movies_df['release_date_kaggle'].isnull()]
+# %%
+# ---------------------DECISION---- language column-----------------
+# compare 2 language columns missing data amount
+movies_df['Language'].apply(lambda x: \
+                    tuple(x) if type(x) == list else x).value_counts(dropna=False)
+
+movies_df['original_language'].value_counts(dropna=False)
+# %%
+# ---------------------DECISION---- language column-----------------
+movies_df[['Production company(s)','production_companies']]
+
+# %%
+# ---------------------ACTION -------DEF FUNCTION---CLEAN MERGED DATAFRAME----------
+# make a function that fills in missing data for a column pair and then drops the redundant column
+def fill_missing_kaggle_data(df, kaggle_col, wiki_col):
+    # check whether kaggle row has non-zero value
+    df[kaggle_col] = df[kaggle_col].apply(lambda row: row[wiki_col] if row[kaggle_col] == 0 else row[kaggle_col], axis = 1)
+    # drop wiki redundent column
+    df.drop(column = wiki_col, inplace = True)
+
+# %%
+# ---------------------ACTION -------CLEAN MERGED DATAFRAME----------
+# drop the title_wiki, release_date_wiki, Language, and Production company(s) columns
+movies_df.drop(['title_wiki','release_date_wiki','Language','Production company(s)'], axis=1, inplace=True)
+
+# %%
+# ---------------------ACTION call funtion----CLEAN MERGED DATAFRAME------
+# no any assigned variable, call clean funtion directly
+fill_missing_kaggle_data(movies_df, 'runtime', 'running_time')
+fill_missing_kaggle_data(movies_df, 'budget_kaggle', 'budget_wiki')
+fill_missing_kaggle_data(movies_df, 'revenue', 'box_office')
+
+movies_df
+
+# %%
+# ----------------CLEAN MERGED DATAFRAME----------------
+# check any columns have only one value
+for col in movies_df.columns:
+    lst_to_tuples_function = lambda x: tuple(x) if type(x) == list else x 
+    value_counts = movies_df[col].apply(lst_to_tuples_function).value_counts(dropna=False)
+    
+    if len(value_counts) == 1:
+        print(col)   # 'video' only have one value: False
+
+# %%
+# drop 'video' column
+movies_df.drop('video', axis =1, inplace= True)
+# %%
+# reoder the columns
+movies_df = movies_df[['imdb_id','id','title_kaggle','original_title','tagline','belongs_to_collection','url','imdb_link',
+                       'runtime','budget_kaggle','revenue','release_date_kaggle','popularity','vote_average','vote_count',
+                       'genres','original_language','overview','spoken_languages','Country',
+                       'production_companies','production_countries','Distributor',
+                       'Producer(s)','Director','Starring','Cinematography','Editor(s)','Writer(s)','Composer(s)','Based on'
+                      ]]
+
+# rename the columns
+movies_df.rename({'id':'kaggle_id',
+                  'title_kaggle':'title',
+                  'url':'wikipedia_url',
+                  'budget_kaggle':'budget',
+                  'release_date_kaggle':'release_date',
+                  'Country':'country',
+                  'Distributor':'distributor',
+                  'Producer(s)':'producers',
+                  'Director':'director',
+                  'Starring':'starring',
+                  'Cinematography':'cinematography',
+                  'Editor(s)':'editors',
+                  'Writer(s)':'writers',
+                  'Composer(s)':'composers',
+                  'Based on':'based_on'
+                 }, axis='columns', inplace=True)
