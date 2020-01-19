@@ -4,8 +4,12 @@ import pandas as pd
 import numpy as np 
 import re
 # pd.to_sql() need connection
+from config import db_password
 from sqlalchemy import create_engine
 import psycopg2 # postgres adaptor 
+
+
+import time
 # %%
 # ----------EXTRACT process-------------------------
 # load Wiki source (json file) into python, use f_string
@@ -408,7 +412,7 @@ movies_df[['Production company(s)','production_companies']]
 # make a function that fills in missing data for a column pair and then drops the redundant column
 def fill_missing_kaggle_data(df, kaggle_col, wiki_col):
     # check whether kaggle row has non-zero value
-    df[kaggle_col] = df[kaggle_col].apply(lambda row: row[wiki_col] if row[kaggle_col] == 0 else row[kaggle_col], axis = 1)
+    df[kaggle_col] = df[kaggle_col].apply(lambda row: row[wiki_col] if row[kaggle_col] == 0 else row[kaggle_col], axis=1)
     # drop wiki redundent column
     df.drop(column = wiki_col, inplace = True)
 
@@ -485,3 +489,9 @@ movies_with_ratings_df = pd.merge(movies_df, rating_counts, how='left', left_on=
 movies_with_ratings_df[rating_counts.columns] = movies_with_ratings_df[rating_counts.columns].fillna(0)
 
 # %%
+# -----------------LOAD TO Postgres-----------------
+db_string = f'postgres://postgres:{db_password}@127.0.0.1:5432/movie_data'
+# use sqlalchemy.create_engine to prepare parameter of pd.to_sql()
+engine = create_engine(db_string)
+
+movies_df.to_sql(name='movies', con=engine)
