@@ -11,12 +11,10 @@ import time
 # %% 
 '''
  ----------EXTRACT process-------------------------
- Assumptions 1: upcoming data resources are as same formats
+ Assumption 1: upcoming data resources are as same formats
  Assumption 2: wiki_data has same alternate title
-
-
-
-
+ Assumption 3: 'Box_office' and 'Budget' columns have consistent data type and format followed by assumed dollar-like Regex
+ Assumption 4: 'release date' column have consistent datetime type and format followed by assumed regex rules
 '''
 # %%
 
@@ -31,13 +29,16 @@ file_dir = '/Users/susiexia/desktop/module_8/Movies-ETL/raw_data'
 # Create a transform function that pass 3 data resources:
 def ETL_data(wiki_data, kaggle_metadata, movielens_ratings):
     # -------------------------------------------------------
-    # extract kaggle and movielens, applied Assumption 1
-    kaggle_metadata_df = pd.read_csv(f'{file_dir}/{kaggle_metadata}', low_memory=False)
-    movielens_ratings_df = pd.read_csv(f'{file_dir}/{movielens_ratings}')
-    # extract wiki_data
-    with open(f'{file_dir}/{wiki_data}', 'r') as js_file:
-        Wiki_raw = json.load(js_file)
-
+    # extract kaggle and movielens
+    # applied Assumption 1
+    try:
+        kaggle_metadata_df = pd.read_csv(f'{file_dir}/{kaggle_metadata}', low_memory=False)
+        movielens_ratings_df = pd.read_csv(f'{file_dir}/{movielens_ratings}')
+        # extract wiki_data
+        with open(f'{file_dir}/{wiki_data}', 'r') as js_file:
+            Wiki_raw = json.load(js_file)
+    except:
+        print('Unable extract the raw dataset')
     # filter wiki datasets by only contains director and Imdb information
     wiki_movies = [movie for movie in Wiki_raw 
                 if ('Directed by' in movie or 'Director' in movie) 
@@ -49,23 +50,23 @@ def ETL_data(wiki_data, kaggle_metadata, movielens_ratings):
     # applied to assumption 2
     def clean_movie(movie):
     # Step 1: Make an empty dict to hold all of the alternative titles.
-    movie = dict(movie)  # make a nondestructure copy
-    alt_titles_dict = dict()
-    # Step 2: Loop through a list of all alternative title keys.
-    target_alt_titles = ['Also known as','Arabic','Cantonese','Chinese','French',
+        movie = dict(movie)  # make a nondestructure copy
+        alt_titles_dict = dict()
+        # Step 2: Loop through a list of all alternative title keys.
+        target_alt_titles = ['Also known as','Arabic','Cantonese','Chinese','French',
                 'Hangul','Hebrew','Hepburn','Japanese','Literally',
                 'Mandarin','McCune–Reischauer','Original title','Polish',
                 'Revised Romanization','Romanized','Russian',
                 'Simplified','Traditional','Yiddish']
-    for key in target_alt_titles:
+        for key in target_alt_titles:
     # Step 2a: Check if the current key exists in the movie object.
-        if key in movie:
+            if key in movie:
     # Step 2b: If so, remove the key-value pair and add to the alternative titles dictionary.
-            alt_titles_dict[key] = movie[key] # move specific key-value pair into new dictionary
-            movie.pop(key)  # remove orginal key-value pairs
+                alt_titles_dict[key] = movie[key] # move specific key-value pair into new dictionary
+                movie.pop(key)  # remove orginal key-value pairs
     # Step 3: After looping through every key, add the alternative titles dict to the movie object.
-    if len(alt_titles_dict) > 0:  # make sure it's valid, then add back to movie, like DF adding column method
-        movie['alt_titles'] = alt_titles_dict
+        if len(alt_titles_dict) > 0:  # make sure it's valid, then add back to movie, like DF adding column method
+            movie['alt_titles'] = alt_titles_dict
     
     
         # inner function for merging column names
@@ -97,211 +98,108 @@ def ETL_data(wiki_data, kaggle_metadata, movielens_ratings):
         return movie
 
     # CALL clean_movie funtion
-    clean_movies_wiki = [clean_movie(movie) for movie in wiki_movies]
-    # transfter into DataFrame
-    wiki_movies_df = pd.DataFrame(clean_movies_wiki)
-
+    try:
+        clean_movies_wiki = [clean_movie(movie) for movie in wiki_movies]
+        # transfter into DataFrame
+        wiki_movies_df = pd.DataFrame(clean_movies_wiki)
+    except:
+        print ('Unable transform wiki_data into pandas.Dataframe')
     # CLEAN ROWS in DF form
     wiki_movies_df['imdb_id'] = wiki_movies_df['imdb_link'].str.extract(r'(tt\d{7})')
     wiki_movies_df.drop_duplicates(subset='imdb_id', inplace=True)
+    
+    # remove columns which have over 90% null rows
+    wiki_columns_to_keep = [column for column in wiki_movies_df.columns.tolist() if wiki_movies_df[column].isnull().sum() < len(wiki_movies_df) * 0.9]
+    wiki_movies_df = wiki_movies_df[wiki_columns_to_keep]
 
+    # Regex instance
+    # applied to Assumption 3
+    # 'Budget' and 'Box_office' data format
+    dollar_form_one = r'\$\s*\d+\.?\d*\s*[mb]illi?on'
+    dollar_form_two = r'\$\s*\d{1,3}(?:[,\.]\d{3})+(?!\s[mb]illi?on)'
 
+    date_form_one = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s[123]\d,\s\d{4}'
+    date_form_two = r'\d{4}.[01]\d.[123]\d'
+    date_form_three = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}'
+    date_form_four = r'\d{4}'
 
+    running_form_one =r'(\d+)\s*m'
+    running_form_two = r'(\d+)\s*ho?u?r?s?\s*(\d*)'
 
+    # applied Assumptions 3
+    # parse and clean BOX_OFFICE, BUDGET, RELEASE_DATE and RUNNING TIME in wiki_data
+
+  
+    def parse_dollars(s):
+        # step 1: check if str type
+        if type(s) != str:
+            return np.nan
+        # step 2: check if match search pattern and return it (use raw string)
+        if re.match(r'\$\s*\d+\.?\d*\s*milli?on', s, flags=re.IGNORECASE):
+            # remove and replace $ and space and 'million' word
+            s = re.sub(r'\$|\s|[a-zA-Z]', '', s)
+            # float it and return 
+            value = float(s)*10**6   # will be a float point number
+            return value
+        # if input is of the form $###.# billion
+        elif re.match(r'\$\s*\d+\.?\d*\s*billi?on', s, flags=re.IGNORECASE):
+            s = re.sub(r'\$|\s|[a-zA-Z]','',s)
+            value = float(s)*10**9
+            return value
+        # if input is of the form $###,###,###
+        elif re.match(r'\$\s*\d{1,3}(?:[,\.]\d{3})+(?!\s[mb]illion)', s, flags=re.IGNORECASE):
+            # remove dollar sign and commas
+            s = re.sub(r'\$|,', '', s)
+            value = float(s)
+            return value
+        else:
+            return np.nan
+        
+    # call FUNCTIONS 
+    try:
+        # parse box_office column in wiki_data
+        box_office_Series = wiki_movies_df['Box office'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)\
+                            .str.replace(r'\$.*[-—–](?![a-z])', '$', regex = True)
+        wiki_movies_df['box_office'] = box_office_Series.str.extract(f'({form_one}|{form_two})', flags=re.IGNORECASE)[0].apply(parse_dollars)
+        # parse budget column in wiki_data
+        budget_Series = wiki_movies_df['Budget'].dropna().map(lambda x: ' '.join(x) if type(x) == list else x)\
+                            .str.replace(r'\$.*[-—–](?![a-z])', '$', regex=True)
+        wiki_movies_df['budget'] = budget_Series.str.extract(f'({form_one}|{form_two})', flags=re.IGNORECASE)[0].apply(parse_dollars)
+
+        # parse release_date column in wiki_data
+        release_date_Series = wiki_movies_df['Release date'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
+        wiki_movies_df['release_date'] = pd.to_datetime(release_date_Series.str.extract(f'({date_form_one}|{date_form_two}|{date_form_three}|{date_form_four})')[0], infer_datetime_format=True)
+
+        # parse running_time column in wiki_data
+        running_time_Series = wiki_movies_df['Running time'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
+        running_time_extract = running_time_Series.str.extract(f'({running_form_one}|{running_form_two})', flags=re.IGNORECASE)\
+                        .apply(lambda col: pd.to_numeric(col, errors= 'coerce')).fillna(0)
+        # convert hour to minute and make a Series then put it back into DF
+        wiki_movies_df['running_time'] = running_time_Series.apply(lambda row: row[0]*60 +row[1] if row[2] == 0 else row[2], axis =1)
+         
+    except:
+        wiki_movies_df['box_office'] = np.nan
+        wiki_movies_df['budget'] = np.nan        
+        wiki_movies_df['release_date'] = np.nan
+        wiki_movies_df['running_time']
+
+        print ('Wrong date format in wiki_data, unable parse this column')
+        
+
+    # drop previous columns
+    wiki_movies_df.drop('Box office', axis=1, inplace=True)
+    wiki_movies_df.drop('Budget', axis = 1, inplace = True)
+    wiki_movies_df.drop('Release date', axis = 1, inplace = True)
+    wiki_movies_df.drop('Running time', axis = 1, inplace = True)
+   
+    # return wiki_movies_df
+    return wiki_movies_df
 
 
 # %%
-ETL_data(wikipedia.movies.json, )
 # %%
 # -----------TRANSFORM process-------------------------
 
-# %%
-# filter wiki datasets by only contains director and Imdb information
-# in original list of dictionary use list comprehension
-wiki_movies = [movie for movie in wiki_movies_raw 
-                if ('Directed by' in movie or 'Director' in movie) 
-                and ('imdb_link' in movie)
-                and ('No. of episodes' not in movie) ]
-len(wiki_movies)  #7076 rows
-# %%
-# create a new, filtered DataFrame after list comprehension
-wiki_movies_director_df = pd.DataFrame(wiki_movies)
-len(wiki_movies_director_df.columns.tolist())
-
-# %%
-# find alternate title columns
-
- # %%
- # ----------TRANSFORM PART 1-1:  CLEAN COLUMNS in python form------------
- # create alt_title cleaning FUNCTION and a inner fuction of merging specific columns
-
-
-# %%
- # ----------TRANSFORM PART 1-2:  CLEAN ROWS in DF form------------
-# use Regex to EXTRACT imdb_ID
-# import re is not nessesary because Series.str.extract() asking for regex in parenthesis
-wiki_movies_df['imdb_id'] = wiki_movies_df['imdb_link'].str.extract(r'(tt\d{7})')
-print(len(wiki_movies_df))
-# use imdb_id as identifier to drop duplicates rows
-wiki_movies_df.drop_duplicates(subset='imdb_id', inplace=True)
-print(len(wiki_movies_df))
-wiki_movies_df.head()
-
-# %%
- # ----------TRANSFORM PART 1-3:  CLEAN mostly null COLUMNS in DF form BY using list comprehension ------------
-# check every column's null count
-# remove columns which have over 90% null rows # now 21 columns
-
-wiki_columns_to_keep = [column for column in wiki_movies_df.columns.tolist() if wiki_movies_df[column].isnull().sum() < len(wiki_movies_df) * 0.9]
-# alter DF on selected columns 
-wiki_movies_df = wiki_movies_df[wiki_columns_to_keep]
-wiki_movies_df.head()
-#wiki_movies_df.dtypes
-# -----191 columns reduced to 21 columns and 7033 rows now
-# %%
-
-#  # ----------TRANSFORM PART 2:  BOX_OFFICE CLEAN ------------
-# drop null rows of box office (1548 null rows)(contains 5485 valid rows)
-box_office_Series = wiki_movies_df['Box office'].dropna()
-len(box_office_Series)
-# %%
-#  # ----------TRANSFORM PART 2(preprocess): ----convert list to string--------BOX_OFFICE CLEAN ------------
-# lambda + map() to pick up 135 not_a_string rows in box_office Series
-# check the amount
-
-#box_office_Series[box_office_Series.map(lambda x: type(x) != str)]
-
-# transform list type into string by 'a space'.join(), apply() and lambda function 
-box_office_Series = box_office_Series.apply(lambda x: ' '.join(x) if type(x) == list else x)
-
-# box_office replace dash in the range type instance then use Series.tri.replace(regex style)
-box_office_Series.str.replace(r'\$.*[-—–](?![a-z])', '$', regex = True)
-
-# %%
-#  # ----------TRANSFORM PART 2(preprocess): ----REGEX TEST--------BOX_OFFICE CLEAN ------------
-                         
-# box_office form-1 : like $ 123.4 million” (or billion)
-form_one = r'\$\s*\d+\.?\d*\s*[mb]illi?on'
-# use pd.Series.str.contains(re) to determine whether contains form_one and sum() 
-matches_form_one_bool = box_office_Series.str.contains(form_one, flags = re.IGNORECASE)
-
-# box_office form-1 : like $123,456,789 or $ 1.234
-form_two = r'\$\s*\d{1,3}(?:[,\.]\d{3})+(?!\s[mb]illi?on)'
-matches_form_two_bool = box_office_Series.str.contains(form_two, flags = re.IGNORECASE)
-
-# element-wise logical operators (&, ~, |) to check remaining wrong format
-remaining_not_clean = box_office_Series[~matches_form_one_bool & ~matches_form_two_bool]
-
-# %%
-#  # ----------TRANSFORM PART 2:  BOX_OFFICE CLEAN  build a funtion based on prework------------
-def parse_dollars(s):
-    # step 1: check if str type
-    if type(s) != str:
-        return np.nan
-    # step 2: check if match search pattern and return it (use raw string)
-    # if input is of the form $###.# million
-    if re.match(r'\$\s*\d+\.?\d*\s*milli?on', s, flags=re.IGNORECASE):
-        # remove and replace $ and space and 'million' word
-        s = re.sub(r'\$|\s|[a-zA-Z]', '', s)
-        # float it and return 
-        value = float(s)*10**6   # will be a float point number
-        return value
-    # if input is of the form $###.# billion
-    elif re.match(r'\$\s*\d+\.?\d*\s*billi?on', s, flags=re.IGNORECASE):
-        s = re.sub(r'\$|\s|[a-zA-Z]','',s)
-        value = float(s)*10**9
-        return value
-    # if input is of the form $###,###,###
-    elif re.match(r'\$\s*\d{1,3}(?:[,\.]\d{3})+(?!\s[mb]illion)', s, flags=re.IGNORECASE):
-        # remove dollar sign and commas
-        s = re.sub(r'\$|,', '', s)
-        value = float(s)
-        return value
-    else:
-        return np.nan
-
-# %%
-#  # ----------TRANSFORM PART 2:  call function----BOX_OFFICE CLEAN ------------
-# use str.extract() funtion to add a new column on DF, and apply function
-# use [0] to extract the first column of  box_office_Series(it's a DF due to extract funtion)
-wiki_movies_df['box_office'] = box_office_Series.str.extract(f'({form_one}|{form_two})', \
-                                flags=re.IGNORECASE)[0].apply(parse_dollars)
-
-# drop previouse column: box office
-wiki_movies_df.drop('Box office', axis=1, inplace=True)
-
-wiki_movies_df.head()
-                            
-
-# %%
-#  # ----------TRANSFORM PART 3: (preprocess) BUDGET CLEAN ------------
-# preprocess 1: drop nan rows
-budget_Series = wiki_movies_df['Budget'].dropna()
-# preprocess 2: convert list to str
-budget_Series = budget_Series.map(lambda x: ' '.join(x) if type(x) == list else x)
-
-# preprocess 3: convert range numbers
-budget_Series = budget_Series.str.replace(r'\$.*[-—–](?![a-z])', '$', regex=True)
-
-# check improper form
-
-matches_form_one_bool = budget_Series.str.contains(form_one, flags = re.IGNORECASE)
-matches_form_one_bool = budget_Series.str.contains(form_one, flags = re.IGNORECASE)
-
-budget_Series[~matches_form_one_bool & ~matches_form_two_bool]
-# %%
-#  # ----------TRANSFORM PART 3: call function BUDGET CLEAN ------------
-
-wiki_movies_df['budget'] = budget_Series.str.extract(f'({form_one}|{form_two})', flags=re.IGNORECASE)[0].apply(parse_dollars)
-
-wiki_movies_df.drop('Budget', axis = 1, inplace = True)
-
-# %%
-#  # ----------TRANSFORM PART 4: (preprocess) RELEASE DATE CLEAN ------------
-# preprocess : drop nan rows and convert list to str
-release_date_Series = wiki_movies_df['Release date'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
-
-# preprocess 3: convert range numbers
-# release_date_Series.str.replace(r'\$.*[-—–](?![a-z])', '$', regex=True)
-
-# check improper form
-date_form_one = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s[123]\d,\s\d{4}'
-date_form_two = r'\d{4}.[01]\d.[123]\d'
-date_form_three = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}'
-date_form_four = r'\d{4}'
-#  # ----------TRANSFORM PART 4: RELEASE DATE CLEAN ------------
-# extract date as a column and use pandas build-in function to convert datetime format
-try: 
-    wiki_movies_df['release_date'] = pd.to_datetime(release_date_Series.str.extract(f'({date_form_one}|{date_form_two}|{date_form_three}|{date_form_four})')[0], infer_datetime_format=True)
-except:
-    wiki_movies_df['release_date'] = np.nan
-    print('Wrong date format')
-wiki_movies_df.drop('Release date', axis = 1, inplace = True)
-
-# %%
-#  # ----------TRANSFORM PART 5: (preprocess) Running Time CLEAN ------------
-
-running_time_Series = wiki_movies_df['Running time'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
-len(running_time_Series)
-# regular pattern (applied caputure group)
-running_form_regular =r'(\d+)\s*m'
-# hour + minute patterns (applied caputure group)
-running_form_two = r'(\d+)\s*ho?u?r?s?\s*(\d*)'
-
-# extract running time and use pd built_in funtion to_numeric convert str to number
-
-running_time_extract_df = running_time_Series.str.extract(r'(\d+)\s*ho?u?r?s?\s*(\d*)|(\d+)\s*m')
-
-# apply to_numeric and fillna() 
-running_time_extract = running_time_extract_df.apply(lambda col: pd.to_numeric(col, errors= 'coerce')).fillna(0)
-
-# convert hour to minute and make a Series then put it back into DF
-# access each row by 'lambda row' function
-wiki_movies_df['running_time'] = running_time_extract.apply(lambda row: row[0]*60 +row[1] if row[2] == 0 else row[2], axis =1)
-# drop origin one
-wiki_movies_df.drop('Running time', axis = 1, inplace = True)
-
-wiki_movies_df.head()
 # %%
 # --------KAGGLE ---TRANSFORM 1 ---adult column  ------------------
 kaggle_metadata_df.dtypes
