@@ -465,3 +465,23 @@ movies_df.rename({'id':'kaggle_id',
                   'Composer(s)':'composers',
                   'Based on':'based_on'
                  }, axis='columns', inplace=True)
+
+
+# %%
+# -----------------RATINGS .csv Transform----------
+# firstly groupby 'userID' and 'rating', then get the count of (each rating of each movie)
+rating_counts = ratings_df.groupby(['movieId','rating'], as_index= False).count()\
+                    .rename({'userId':'count'}, axis=1).pivot(index='movieId', columns='rating',values='count')
+
+# rename every columns use list comprehension
+rating_counts.columns = ['rating_' +str(col) for col in rating_counts.columns]
+
+# %%
+# -----------------RATINGS .csv MERGE into main DF----------
+# left merge into main table: movies_df
+movies_with_ratings_df = pd.merge(movies_df, rating_counts, how='left', left_on='kaggle_id',right_index=True)
+
+# fill NaN with zero in all rating columns
+movies_with_ratings_df[rating_counts.columns] = movies_with_ratings_df[rating_counts.columns].fillna(0)
+
+# %%
