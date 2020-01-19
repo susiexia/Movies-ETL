@@ -11,10 +11,16 @@ import time
 # %% 
 '''
  ----------EXTRACT process-------------------------
- Assumption 1: upcoming data resources are as same formats
+ Assumption 1: input data resources are keeping same formats, same columns name and same data types.
  Assumption 2: wiki_data has same alternate title
- Assumption 3: 'Box_office' and 'Budget' columns have consistent data type and format followed by assumed dollar-like Regex
- Assumption 4: 'release date' column have consistent datetime type and format followed by assumed regex rules
+ Assumption 3: wiki_data: 'Box_office', 'Budget','release date' and 'running_time 'columns 
+                have consistent data types and format followed by assumed Regex rules
+ Assumption 4: kaggle_data: 'budget', 'id', 'popularity' and 'release_date' columns
+                have consistent and appropriate data types, no any errors would be raised 
+                when use astype(), to_numeric() and to_datetime() funtions.
+ Assumption 5: The common column for merge dataframe would be unchanged. 
+                Merge two dataframes, wiki_data and kaggle_data, woulbe be on 'imdb_id' column.
+ Assumption 6: The movielens_ratings dataset would be able to groupby two columns 'movieId','rating'.
 '''
 # %%
 
@@ -27,12 +33,12 @@ file_dir = '/Users/susiexia/desktop/module_8/Movies-ETL/raw_data'
 
 # %%
 # Create a transform function that pass 3 data resources:
-def ETL_data(wiki_data, kaggle_metadata, movielens_ratings):
+def ETL_data(wiki_data, kaggle_data, movielens_ratings):
     # -------------------------------------------------------
     # extract kaggle and movielens
     # applied Assumption 1
     try:
-        kaggle_metadata_df = pd.read_csv(f'{file_dir}/{kaggle_metadata}', low_memory=False)
+        kaggle_data_df = pd.read_csv(f'{file_dir}/{kaggle_data}', low_memory=False)
         movielens_ratings_df = pd.read_csv(f'{file_dir}/{movielens_ratings}')
         # extract wiki_data
         with open(f'{file_dir}/{wiki_data}', 'r') as js_file:
@@ -193,180 +199,71 @@ def ETL_data(wiki_data, kaggle_metadata, movielens_ratings):
     wiki_movies_df.drop('Running time', axis = 1, inplace = True)
    
     # return wiki_movies_df
-    return wiki_movies_df
 
-
-# %%
-# %%
-# -----------TRANSFORM process-------------------------
-
-# %%
-# --------KAGGLE ---TRANSFORM 1 ---adult column  ------------------
-kaggle_metadata_df.dtypes
-
-# check if 'adult' and 'video' are ready to convert to boolean
-kaggle_metadata_df['adult'].value_counts()  # several bad data in 'adult'
-# check where is the bad data other than True or False
-corrupt_adult = kaggle_metadata_df['adult'].isin(['True', 'False'])
-kaggle_metadata_df.loc[~corrupt_adult] 
-
-# only keep rows where adult is False,(filter the whole df) and then drop the “adult” column.
-# reduced kaggle_metadata DF by 12 rows and 1 columns
-kaggle_metadata = kaggle_metadata_df[kaggle_metadata_df['adult']== 'False'].drop('adult', axis = 'columns')
-
-kaggle_metadata.head()
-# %%
-# --------KAGGLE ---TRANSFORM 2 video column------------------
-# convert data type from str to boolean
-
-# create boolean column
-# kaggle_metadata['video'] == 'True'
-# assign back to DF
-kaggle_metadata['video'] = kaggle_metadata['video'] == 'True'
-kaggle_metadata.video.dtypes
-# %%
-# --------KAGGLE ---TRANSFORM 3 budget, id, popularity and release_date column------------------
-# convert those 3 columns from str type to numeric
-# use astype for 'budget' column
-kaggle_metadata['budget'] = kaggle_metadata['budget'].astype(int)
-# use pd.to_numeric for 'id' and 'popularity' columns
-kaggle_metadata['id'] = pd.to_numeric(kaggle_metadata['id'])
-kaggle_metadata['popularity'] = pd.to_numeric(kaggle_metadata['popularity'], errors= 'raise')
-# use to_datetime for 'release_date' column
-kaggle_metadata['release_date'] = pd.to_datetime(kaggle_metadata['release_date'],errors='raise')
-
-# %%
-# --------Ratings csv ---TRANSFORM ---------------------------
-# check a summary description
-ratings_df.info(null_counts= True)
-
-# convert timstamp to pd.datetime data type, unit is second
-ratings_df['timestamp'] = pd.to_datetime(ratings_df['timestamp'], unit='s')
-ratings_df.info()
-
-# %%
-# --------Ratings csv ---TRANSFORM --stats info ---------------------------
-
-# check data distribution by histogram 
-ratings_df['rating'].plot(kind = 'hist')
-# check data statistical information
-ratings_df['rating'].describe()   #The median score is 3.5, the mean is 3.53
-
-# %%
-# ---------------TRANSFORM: MERGE DF (inner join)-------------------------------
-movies_df = pd.merge(wiki_movies_df, kaggle_metadata, on ='imdb_id', suffixes=('_wiki','_kaggle'))
-movies_df.head()
-# %% [markdown]
-# Competing data:
-# Wiki                     Movielens                Resolution
-#--------------------------------------------------------------------------
-# title_wiki               title_kaggle            Drop Wikipedia
-# running_time             runtime                 Keep Kaggle; and fill in zeros with Wikipedia data
-# budget_wiki              budget_kaggle           Keep Kaggle; and fill in zeros with Wikipedia data
-# box_office               revenue                 Keep Kaggle; and fill in zeros with Wikipedia data
-# release_date_wiki        release_date_kaggle     Drop Wikipedia
-# Language                 original_language       Drop Wikipedia
-# Production company(s)    production_companies    Drop Wikipedia
-
-# %%
-# ---------------------DECISION-----title column-----------------
-# compare two title columns
-movies_df[['title_wiki','title_kaggle']]
-# confirm there is no any missing data or empty in kaggle title column
-movies_df[(movies_df['title_kaggle'] == '')|(movies_df['title_kaggle'].isnull())]
-
-# %%
-# ---------------------DECISION-----runtime column-----------------
-# draw a scatter plot to reveal any outlier and missing data
-movies_df.fillna(0).plot(x='running_time', y='runtime', kind = 'scatter')
-# %%
-# ---------------------DECISION-----Budget column-----------------
-# draw a scatter plot to reveal any outlier and missing data
-movies_df.fillna(0).plot(x='budget_wiki', y='budget_kaggle', kind = 'scatter')
-
-
-# %%
-# ---------------------DECISION-----BOX OFFICE & Revenue column-----------------
-# draw a scatter plot to reveal any outlier and missing data
-movies_df.fillna(0).plot(x='box_office', y='revenue', kind = 'scatter')
-
-# ---------------------DECISION----- narrow down scale BOX OFFICE & Revenue column-----------------
-#  scatter plot for everything less than $1 billion in box_office(x axies)
-narrow_down_box_movies_df = movies_df[movies_df['box_office']<10**9].fillna(0)
-narrow_down_box_movies_df.plot(x='box_office', y='revenue', kind = 'scatter')
-
-# %%
-# ---------------------DECISION---- release date (datetime)column-----------------
-movies_df[['release_date_wiki','release_date_kaggle']].plot(x= 'release_date_wiki',y='release_date_kaggle', style='.')
-
-# %%
-# investigate the outlier around 2006 (wiki)
-# and decide to drop this invalid row
-bad_data_index = movies_df[(movies_df['release_date_wiki'] > '1996-01-01') & (movies_df['release_date_kaggle'] < '1965-01-01')].index
-
-movies_df.drop(bad_data_index)
-# check missing data point in wiki (11 rows)
-movies_df[movies_df['release_date_wiki'].isnull()]
-# check missing data point in kaggle ( no missing data )
-movies_df[movies_df['release_date_kaggle'].isnull()]
-# %%
-# ---------------------DECISION---- language column-----------------
-# compare 2 language columns missing data amount
-movies_df['Language'].apply(lambda x: \
-                    tuple(x) if type(x) == list else x).value_counts(dropna=False)
-
-movies_df['original_language'].value_counts(dropna=False)
-# %%
-# ---------------------DECISION---- language column-----------------
-movies_df[['Production company(s)','production_companies']]
-
-# %%
-# ---------------------ACTION -------DEF FUNCTION---CLEAN MERGED DATAFRAME----------
-# make a function that fills in missing data for a column pair and then drops the redundant column
-def fill_missing_kaggle_data(df, kaggle_col, wiki_col):
-    # check whether kaggle row has non-zero value
-    df[kaggle_col] = df[kaggle_col].apply(lambda row: row[wiki_col] if row[kaggle_col] == 0 else row[kaggle_col], axis=1)
-    # drop wiki redundent column
-    df.drop(column = wiki_col, inplace = True)
-
-# %%
-# ---------------------ACTION -------CLEAN MERGED DATAFRAME----------
-# drop the title_wiki, release_date_wiki, Language, and Production company(s) columns
-movies_df.drop(['title_wiki','release_date_wiki','Language','Production company(s)'], axis=1, inplace=True)
-
-# %%
-# ---------------------ACTION call funtion----CLEAN MERGED DATAFRAME------
-# no any assigned variable, call clean funtion directly
-fill_missing_kaggle_data(movies_df, 'runtime', 'running_time')
-fill_missing_kaggle_data(movies_df, 'budget_kaggle', 'budget_wiki')
-fill_missing_kaggle_data(movies_df, 'revenue', 'box_office')
-
-movies_df
-
-# %%
-# ----------------CLEAN MERGED DATAFRAME----------------
-# check any columns have only one value
-for col in movies_df.columns:
-    lst_to_tuples_function = lambda x: tuple(x) if type(x) == list else x 
-    value_counts = movies_df[col].apply(lst_to_tuples_function).value_counts(dropna=False)
+    # -------------------------------------------------------
+    # TRANSFORM kaggle_data
     
-    if len(value_counts) == 1:
-        print(col)   # 'video' only have one value: False
+    # filter kaggle_data with only adult is False
+    kaggle_metadata = kaggle_data_df[kaggle_data_df['adult']== 'False'].drop('adult', axis = 'columns')
+    # convert 'video' data type from str to boolean
+    kaggle_metadata['video'] = kaggle_metadata['video'] == 'True'
 
-# %%
-# drop 'video' column
-movies_df.drop('video', axis =1, inplace= True)
-# %%
-# reoder the columns
-movies_df = movies_df[['imdb_id','id','title_kaggle','original_title','tagline','belongs_to_collection','url','imdb_link',
+    # applied to Assumption 4:
+    # convert Kaggle's budget, id, popularity and release_date columns data type
+    try:
+        kaggle_metadata['budget'] = kaggle_metadata['budget'].astype(int)
+        kaggle_metadata['id'] = pd.to_numeric(kaggle_metadata['id'])
+        kaggle_metadata['popularity'] = pd.to_numeric(kaggle_metadata['popularity'], errors= 'raise')
+        kaggle_metadata['release_date'] = pd.to_datetime(kaggle_metadata['release_date'],errors='raise')
+    except:
+        print('inappropriate data types in Kaggle_megadata')
+    
+    
+    # -------------------------------------------------------
+    # TRANSFORM movielens_ratings_df
+    # convert rating's timestamp into datetime
+    movielens_ratings_df['timestamp'] = pd.to_datetime(movielens_ratings_df['timestamp'], unit='s')
+
+    # -------------------------------------------------------
+    # TRANSFORM MERGE wiki_movies_df with kaggle_metadata
+    # Assumption 5
+    movies_df = pd.merge(wiki_movies_df, kaggle_metadata, on ='imdb_id', suffixes=('_wiki','_kaggle'))
+
+    # PARSE MERGED dataframe
+    # Assumption 6
+    movies_df.drop(['title_wiki','release_date_wiki','Language','Production company(s)'], axis=1, inplace=True)
+
+    # make a function that fills in missing data for a column pair and then drops the redundant column
+    def fill_missing_kaggle_data(df, kaggle_column, wiki_column):
+        df[kaggle_column] = df.apply(
+            lambda row: row[wiki_column] if row[kaggle_column] == 0 else row[kaggle_column]
+            , axis=1)
+        df.drop(columns=wiki_column, inplace=True)
+    
+    #  CALL funtion----CLEAN MERGED DATAFRAME------
+    # no any assigned variable, call clean funtion directly
+    fill_missing_kaggle_data(movies_df, 'runtime', 'running_time')
+    fill_missing_kaggle_data(movies_df, 'budget_kaggle', 'budget_wiki')
+    fill_missing_kaggle_data(movies_df, 'revenue', 'box_office')
+
+    # check any columns have only one value
+    for col in movies_df.columns:
+        lst_to_tuples_function = 
+        value_counts = movies_df[col].apply(lambda x: tuple(x) if type(x) == list else x )\
+                        .value_counts(dropna=False)
+    
+        if len(value_counts) == 1:
+            movies_df.drop(col, axis =1, inplace= True)
+    # reoder the columns
+    movies_df = movies_df[['imdb_id','id','title_kaggle','original_title','tagline','belongs_to_collection','url','imdb_link',
                        'runtime','budget_kaggle','revenue','release_date_kaggle','popularity','vote_average','vote_count',
                        'genres','original_language','overview','spoken_languages','Country',
                        'production_companies','production_countries','Distributor',
                        'Producer(s)','Director','Starring','Cinematography','Editor(s)','Writer(s)','Composer(s)','Based on'
                       ]]
-
-# rename the columns
-movies_df.rename({'id':'kaggle_id',
+    
+    # rename the columns
+    movies_df.rename({'id':'kaggle_id',
                   'title_kaggle':'title',
                   'url':'wikipedia_url',
                   'budget_kaggle':'budget',
@@ -382,41 +279,32 @@ movies_df.rename({'id':'kaggle_id',
                   'Composer(s)':'composers',
                   'Based on':'based_on'
                  }, axis='columns', inplace=True)
-
-
-# %%
-# -----------------RATINGS .csv Transform----------
-# firstly groupby 'userID' and 'rating', then get the count of (each rating of each movie)
-rating_counts = ratings_df.groupby(['movieId','rating'], as_index= False).count()\
+    
+    # -------------------------------------------------------
+    # TRANSFORM MERGE wiki_movies_df with rating
+    
+    
+    # Assumption 6
+    # firstly groupby 'userID' and 'rating', then get the count of (each rating of each movie)
+    rating_counts = movielens_ratings_df.groupby(['movieId','rating'], as_index= False).count()\
                     .rename({'userId':'count'}, axis=1).pivot(index='movieId', columns='rating',values='count')
+    
+    # rename every columns use list comprehension
+    rating_counts.columns = ['rating_' +str(col) for col in rating_counts.columns]
 
-# rename every columns use list comprehension
-rating_counts.columns = ['rating_' +str(col) for col in rating_counts.columns]
+    # left merge into main table: movies_df
+    movies_with_ratings_df = pd.merge(movies_df, rating_counts, how='left', left_on='kaggle_id',right_index=True)
 
-# %%
-# -----------------RATINGS .csv MERGE into main DF----------
-# left merge into main table: movies_df
-movies_with_ratings_df = pd.merge(movies_df, rating_counts, how='left', left_on='kaggle_id',right_index=True)
+    # fill NaN with zero in all rating columns
+    movies_with_ratings_df[rating_counts.columns] = movies_with_ratings_df[rating_counts.columns].fillna(0)
 
-# fill NaN with zero in all rating columns
-movies_with_ratings_df[rating_counts.columns] = movies_with_ratings_df[rating_counts.columns].fillna(0)
 
-# %%
-# -----------------LOAD MOVIES_DF TO Postgres-----------------
-db_string = f'postgres://postgres:{db_password}@127.0.0.1:5432/movie_data'
-# use sqlalchemy.create_engine to prepare parameter of pd.to_sql()
-engine = create_engine(db_string)
 
-movies_df.to_sql(name='movies', con=engine)
 
-# %%
-# -----------------LOAD rating csv to Postgres-------
-rows_imported = 0
-# get the start_time from time.time()
-start_time = time.time()
-for data in pd.read_csv(f'{file_dir}/ratings.csv', chunksize=1000000):
-    print(f'importing rows {rows_imported} to {rows_imported + len(data)}...', end='')
-    data.to_sql(name='ratings', con=engine, if_exists='append')
-    rows_imported += len(data)
+    # -------------------------------------------------------
+    # LOAD to PostgreSQL
 
-    # add elapsed time to final print out
+    engine = create_engine(f'postgres://postgres:{db_password}@127.0.0.1:5432/movie_data')
+
+    movies_with_ratings_df.to_sql(name='movies', con=engine, if_exists ='replace')
+
