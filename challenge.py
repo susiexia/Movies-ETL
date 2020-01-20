@@ -9,34 +9,33 @@ import psycopg2
 
 import time
 # %% 
-'''
- ----------EXTRACT process-------------------------
- Assumption 1: input data resources are keeping same formats, same columns name and same data types.
- Assumption 2: wiki_data has same alternate title
- Assumption 3: wiki_data: 'Box_office', 'Budget','release date' and 'running_time 'columns 
-                have consistent data types and format followed by assumed Regex rules
- Assumption 4: kaggle_data: 'budget', 'id', 'popularity' and 'release_date' columns
-                have consistent and appropriate data types, no any errors would be raised 
-                when use astype(), to_numeric() and to_datetime() funtions.
- Assumption 5: The common column for merge dataframe would be unchanged. 
-                Merge two dataframes, wiki_data and kaggle_data, woulbe be on 'imdb_id' column.
- Assumption 6: The movielens_ratings dataset would be able to groupby two columns 'movieId','rating'.
-'''
-# %%
 
-file_dir = '/Users/susiexia/desktop/module_8/Movies-ETL/raw_data'
 
 
 # %% [markdown]
-# ----------TRANSFORM process-------------------------
+# ----------CREATE A FUNCTION -------------------------
 
 
 # %%
 # Create a transform function that pass 3 data resources:
 def ETL_data(wiki_data, kaggle_data, movielens_ratings):
-    # -------------------------------------------------------
-    # extract kaggle and movielens
+    '''
+    ----------EXTRACT process-------------------------
+    Assumption 1: input data resources are keeping same formats, same columns name and same data types.
+    Assumption 2: wiki_data has same alternate title
+    Assumption 3: wiki_data: 'Box_office', 'Budget','release date' and 'running_time 'columns 
+                have consistent data types and format followed by assumed Regex rules
+    Assumption 4: kaggle_data: 'budget', 'id', 'popularity' and 'release_date' columns
+                have consistent and appropriate data types, no any errors would be raised 
+                when use astype(), to_numeric() and to_datetime() funtions.
+    Assumption 5: The common column for merge dataframe would be unchanged. 
+                Merge two dataframes, wiki_data and kaggle_data, woulbe be on 'imdb_id' column.
+    Assumption 6: The movielens_ratings dataset would be able to groupby two columns 'movieId','rating'.
+    '''
+    # -------------------------------------------------------------------
     # applied Assumption 1
+    file_dir = '/Users/susiexia/desktop/module_8/Movies-ETL/raw_data'
+
     try:
         kaggle_data_df = pd.read_csv(f'{file_dir}/{kaggle_data}', low_memory=False)
         movielens_ratings_df = pd.read_csv(f'{file_dir}/{movielens_ratings}')
@@ -129,8 +128,6 @@ def ETL_data(wiki_data, kaggle_data, movielens_ratings):
     date_form_three = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}'
     date_form_four = r'\d{4}'
 
-    running_form_one =r'(\d+)\s*m'
-    running_form_two = r'(\d+)\s*ho?u?r?s?\s*(\d*)'
 
     # applied Assumptions 3
     # parse and clean BOX_OFFICE, BUDGET, RELEASE_DATE and RUNNING TIME in wiki_data
@@ -162,34 +159,36 @@ def ETL_data(wiki_data, kaggle_data, movielens_ratings):
             return np.nan
         
     # call FUNCTIONS 
-    try:
-        # parse box_office column in wiki_data
-        box_office_Series = wiki_movies_df['Box office'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)\
+    
+
+    # parse box_office column in wiki_data
+    box_office_Series = wiki_movies_df['Box office'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)\
                             .str.replace(r'\$.*[-—–](?![a-z])', '$', regex = True)
-        wiki_movies_df['box_office'] = box_office_Series.str.extract(f'({form_one}|{form_two})', flags=re.IGNORECASE)[0].apply(parse_dollars)
-        # parse budget column in wiki_data
-        budget_Series = wiki_movies_df['Budget'].dropna().map(lambda x: ' '.join(x) if type(x) == list else x)\
+    wiki_movies_df['box_office'] = box_office_Series.str.extract(f'({dollar_form_one}|{dollar_form_two})', flags=re.IGNORECASE)[0].apply(parse_dollars)
+    # parse budget column in wiki_data
+    budget_Series = wiki_movies_df['Budget'].dropna().map(lambda x: ' '.join(x) if type(x) == list else x)\
                             .str.replace(r'\$.*[-—–](?![a-z])', '$', regex=True)
-        wiki_movies_df['budget'] = budget_Series.str.extract(f'({form_one}|{form_two})', flags=re.IGNORECASE)[0].apply(parse_dollars)
+    wiki_movies_df['budget'] = budget_Series.str.extract(f'({dollar_form_one}|{dollar_form_two})', flags=re.IGNORECASE)[0].apply(parse_dollars)
 
-        # parse release_date column in wiki_data
-        release_date_Series = wiki_movies_df['Release date'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
-        wiki_movies_df['release_date'] = pd.to_datetime(release_date_Series.str.extract(f'({date_form_one}|{date_form_two}|{date_form_three}|{date_form_four})')[0], infer_datetime_format=True)
+    # parse release_date column in wiki_data
+    release_date_Series = wiki_movies_df['Release date'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
+    wiki_movies_df['release_date'] = pd.to_datetime(release_date_Series.str.extract(f'({date_form_one}|{date_form_two}|{date_form_three}|{date_form_four})')[0], infer_datetime_format=True)
 
-        # parse running_time column in wiki_data
-        running_time_Series = wiki_movies_df['Running time'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
-        running_time_extract = running_time_Series.str.extract(f'({running_form_one}|{running_form_two})', flags=re.IGNORECASE)\
-                        .apply(lambda col: pd.to_numeric(col, errors= 'coerce')).fillna(0)
-        # convert hour to minute and make a Series then put it back into DF
-        wiki_movies_df['running_time'] = running_time_Series.apply(lambda row: row[0]*60 +row[1] if row[2] == 0 else row[2], axis =1)
-         
-    except:
-        wiki_movies_df['box_office'] = np.nan
-        wiki_movies_df['budget'] = np.nan        
-        wiki_movies_df['release_date'] = np.nan
-        wiki_movies_df['running_time']
+    # parse running_time column in wiki_data
+    running_time_Series = wiki_movies_df['Running time'].dropna().apply(lambda x: ' '.join(x) if type(x) == list else x)
+    running_time_extract_df = running_time_Series.str.extract(r'(\d+)\s*ho?u?r?s?\s*(\d*)|(\d+)\s*m')
+    running_time_extract = running_time_extract_df.apply(lambda col: pd.to_numeric(col, errors= 'coerce')).fillna(0)
 
-        print ('Wrong date format in wiki_data, unable parse this column')
+    # convert hour to minute and make a Series then put it back into DF
+    wiki_movies_df['running_time'] = running_time_extract.apply(lambda row: row[0]*60 +row[1] if row[2] == 0 else row[2], axis =1)
+
+    
+    wiki_movies_df['box_office'] = np.nan
+    wiki_movies_df['budget'] = np.nan        
+    wiki_movies_df['release_date'] = np.nan
+    wiki_movies_df['running_time'] = np.nan
+
+        #print ('Wrong date format in wiki_data, unable parse this column')
         
 
     # drop previous columns
@@ -248,7 +247,6 @@ def ETL_data(wiki_data, kaggle_data, movielens_ratings):
 
     # check any columns have only one value
     for col in movies_df.columns:
-        lst_to_tuples_function = 
         value_counts = movies_df[col].apply(lambda x: tuple(x) if type(x) == list else x )\
                         .value_counts(dropna=False)
     
@@ -308,3 +306,14 @@ def ETL_data(wiki_data, kaggle_data, movielens_ratings):
 
     movies_with_ratings_df.to_sql(name='movies', con=engine, if_exists ='replace')
 
+    print(f'''
+        ETL process is successful done.\n Extracting from {wiki_data}, {kaggle_data}and {movielens_ratings}.\n 
+        Results movies table in PostgreSQL.''')
+
+
+# %% 
+# -------------------------CALL function---------------------------
+ETL_data("wikipedia.movies.json", "movies_metadata.csv", "ratings.csv")
+
+
+# %%
