@@ -3,17 +3,17 @@ Extract, Transform and Load (ETL) from Wikipedia(JSON format), Kaggle(csv file) 
 
 ### Resources:
 
-- a unstructure web-scraped JSON file of over 5,000 movies from 1990 to 2019, from wikipedia(wikipedia.movies.json)[/raw_data/wikipedia.movies.json]
+- a unstructure web-scraped JSON file of over 5,000 movies from 1990 to 2019, from wikipedia[wikipedia.movies.json](/raw_data/wikipedia.movies.json)
 
-- a unstructure csv file from Kaggle (movies_metadata.csv)[/raw_data/movies_metadata.csv]
+- a unstructure csv file from Kaggle [movies_metadata.csv](/raw_data/movies_metadata.csv)
 
 - a large unstructure csv file from MovieLens with movie rating information (ratings.csv)
 
 ### Outputs:
 
-- ETL Python script(movies_ETL.py)[/movies_ETL.py]
+- ETL Python script [movies_ETL.py](/movies_ETL.py)
 
-- ETL Jupyter NoteBooks (movies_ETL.ipynb)[/movies_ETL.ipynb]
+- ETL Jupyter NoteBooks [movies_ETL.ipynb](/movies_ETL.ipynb)
 
 
 # Challenge
@@ -30,6 +30,6 @@ Extract, Transform and Load (ETL) from Wikipedia(JSON format), Kaggle(csv file) 
 
 ### Challenge Outputs:
 
-- Challenge automated Pipeline Python script(challenge.py)[/challenge.py]
+- Challenge automated Pipeline Python script[challenge.py](/challenge.py)
 
-- Challenge automated Pipeline Jupyter NoteBooks (challenge.ipynb)[/challenge.ipynb]
+- Challenge automated Pipeline Jupyter NoteBooks [challenge.ipynb](/challenge.ipynb)
