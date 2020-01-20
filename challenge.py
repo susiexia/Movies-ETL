@@ -8,29 +8,28 @@ from sqlalchemy import create_engine
 import psycopg2 
 
 import time
-# %% 
-
-
+# %% [markdown]
+# Build an automated ETL process
 
 # %% [markdown]
-# ----------CREATE A FUNCTION -------------------------
-
+## CREATE A FUNCTION through Etraxt-Transform-Load process
 
 # %%
-# Create a transform function that pass 3 data resources:
 def ETL_data(wiki_data, kaggle_data, movielens_ratings):
     '''
     ----------EXTRACT process-------------------------
-    Assumption 1: input data resources are keeping same formats, same columns name and same data types.
-    Assumption 2: wiki_data has same alternate title
+    Assumption 1:Input data resources are keeping same formats, same columns name, 
+                same column's order and same data types.
+    Assumption 2: wiki_data has same alternate titles
     Assumption 3: wiki_data: 'Box_office', 'Budget','release date' and 'running_time 'columns 
                 have consistent data types and format followed by assumed Regex rules
     Assumption 4: kaggle_data: 'budget', 'id', 'popularity' and 'release_date' columns
-                have consistent and appropriate data types, no any errors would be raised 
+                have consistent and appropriate data types, no any errors would be raised.
                 when use astype(), to_numeric() and to_datetime() funtions.
     Assumption 5: The common column for merge dataframe would be unchanged. 
                 Merge two dataframes, wiki_data and kaggle_data, woulbe be on 'imdb_id' column.
     Assumption 6: The movielens_ratings dataset would be able to groupby two columns 'movieId','rating'.
+    Assumption 7: The PostgreSQL owner and server names keep unchanged. 
     '''
     # -------------------------------------------------------------------
     # applied Assumption 1
@@ -70,16 +69,16 @@ def ETL_data(wiki_data, kaggle_data, movielens_ratings):
                 alt_titles_dict[key] = movie[key] # move specific key-value pair into new dictionary
                 movie.pop(key)  # remove orginal key-value pairs
     # Step 3: After looping through every key, add the alternative titles dict to the movie object.
-        if len(alt_titles_dict) > 0:  # make sure it's valid, then add back to movie, like DF adding column method
+        if len(alt_titles_dict) > 0:  # make sure it's valid, then add back to movie
             movie['alt_titles'] = alt_titles_dict
     
     
-        # inner function for merging column names
+        # Inner function for merging column names
         def change_column_name(old_name, new_name):
             if old_name in movie:
                 movie[new_name] = movie.pop(old_name)
                 # no return needed
-        # call inner function on every instance in outer function's scope
+        # Call inner function on every instance in outer function's scope
         change_column_name('Adaptation by', 'Writer(s)')
         change_column_name('Country of origin', 'Country')
         change_column_name('Directed by', 'Director')
@@ -186,10 +185,7 @@ def ETL_data(wiki_data, kaggle_data, movielens_ratings):
     wiki_movies_df['box_office'] = np.nan
     wiki_movies_df['budget'] = np.nan        
     wiki_movies_df['release_date'] = np.nan
-    wiki_movies_df['running_time'] = np.nan
-
-        #print ('Wrong date format in wiki_data, unable parse this column')
-        
+    wiki_movies_df['running_time'] = np.nan        
 
     # drop previous columns
     wiki_movies_df.drop('Box office', axis=1, inplace=True)
@@ -301,7 +297,7 @@ def ETL_data(wiki_data, kaggle_data, movielens_ratings):
 
     # -------------------------------------------------------
     # LOAD to PostgreSQL
-
+    # applied Assumption 7
     engine = create_engine(f'postgres://postgres:{db_password}@127.0.0.1:5432/movie_data')
 
     movies_with_ratings_df.to_sql(name='movies', con=engine, if_exists ='replace')
